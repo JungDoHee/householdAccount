@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 from datetime import date
+from openpyxl.styles import PatternFill
 
 from Config import document
 from Excel import excel_header as xl_header
@@ -16,6 +17,11 @@ files = os.listdir(document.ACCOUNT_DOCUMENT)
 
 # 가계부의 데이터를 읽어온다
 excel_data = pd.DataFrame()
+
+def cell_color(sheet, column_len, column_no, color, type='solid') :
+    for col_num in range(column_len) :
+            cell = sheet.cell(row=1, column=column_no+col_num)
+            cell.fill = PatternFill(start_color=color, end_color=color, fill_type=type)
 
 for file_name in files:
     card_type = file_name.split("_")[0].lower()
@@ -51,7 +57,7 @@ excel_data = excel_data.sort_values(by='결제일')
 excel_data['월'] = excel_data['결제일'].dt.to_period('M').astype(str)
 
 # 산출물 파일 만들기 (월별 시트 분리)
-output_file_name = '{0}_{1}_{2}_가계부.xlsx'.format(excel_data['월'].iloc[0], excel_data['월'].iloc[-1], date.today())
+output_file_name = '{0}-{1}_{2}_가계부.xlsx'.format(excel_data['월'].iloc[0], excel_data['월'].iloc[-1], date.today())
 with pd.ExcelWriter(document.EXPORT_DOCUMENT+'/'+output_file_name, engine='openpyxl') as writer : 
     for month, group in excel_data.groupby('월') : 
         # 은행/카드/증권사별 소계 계산
@@ -78,9 +84,15 @@ with pd.ExcelWriter(document.EXPORT_DOCUMENT+'/'+output_file_name, engine='openp
         end_data.sort_values(by='항목')
 
         # 데이터 포맷 맞추기
+        total_income = mid_data['소계'].sum()
         mid_data['지출소계'] = format.numberFormat(mid_data['지출소계'])
         mid_data['수입소계'] = format.numberFormat(mid_data['수입소계'])
         mid_data['소계'] = format.numberFormat(mid_data['소계'])
+        
+        # 총 수입 추가
+        total_income = format.numberFormat(total_income)
+        total_sum = pd.DataFrame(columns=['총 수입'], data=[total_income])
+        mid_data = pd.concat([mid_data, total_sum], axis=1)
 
         end_data['지출소계'] = format.numberFormat(end_data['지출소계'])
         end_data['수입소계'] = format.numberFormat(end_data['수입소계'])
@@ -90,9 +102,16 @@ with pd.ExcelWriter(document.EXPORT_DOCUMENT+'/'+output_file_name, engine='openp
         group['수입금액'] = format.numberFormat(group['수입금액'])
         group['결제일'] = group['결제일'].dt.strftime('%Y-%m-%d')
         group.drop(columns=['월', '소계'], inplace=True)
-
-        resultData = pd.concat([group, mid_data, end_data], axis=1)
-
-        resultData.to_excel(writer, sheet_name=month, index=False)
         
-        # TODO (UI 개선)디자인 추가
+        group.to_excel(writer, sheet_name=month, index=False, startrow=0, startcol=0)
+        mid_data.to_excel(writer, sheet_name=month, index=False, startrow=0, startcol=6)
+        end_data.to_excel(writer, sheet_name=month, index=False, startrow=0, startcol=12)
+        
+        resultData = pd.concat([group, mid_data, end_data], axis=1)
+        
+        # # TODO (UI 개선)디자인 추가
+        # worksheet = writer.sheets[month]
+
+        # cell_color(worksheet, len(group.columns), 1, 'FFF2CC')
+        # cell_color(worksheet, len(mid_data.columns), 7, 'CFE2F3')
+        # cell_color(worksheet, len(end_data.columns), 13, 'F4CCCC')

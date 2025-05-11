@@ -14,4 +14,9 @@ def normalizeDateFomat(date_str) :
     return date_str
 
 def numberFormat(number) : 
-    return number.apply('{:,}'.format)
+    try :
+        # Series나 반복하는 타입인 경우
+        return number.apply('{:,}'.format)
+    except :
+        # 이미 숫자 형식인 경우
+        return '{:,}'.format(number)
