@@ -1,7 +1,9 @@
 import os
 import pandas as pd
 from datetime import date
-from openpyxl.styles import PatternFill
+from openpyxl.styles import PatternFill, Alignment, Border, Side
+import re
+import unicodedata
 
 from Config import document
 from Excel import excel_header as xl_header
@@ -18,10 +20,61 @@ files = os.listdir(document.ACCOUNT_DOCUMENT)
 # 가계부의 데이터를 읽어온다
 excel_data = pd.DataFrame()
 
+dictBorder = {
+    'left' : 'thin',
+    'right' : 'thin',
+    'top' : 'thin',
+    'bottom' : 'thin'
+}
+
 def cell_color(sheet, column_len, column_no, color, type='solid') :
     for col_num in range(column_len) :
             cell = sheet.cell(row=1, column=column_no+col_num)
             cell.fill = PatternFill(start_color=color, end_color=color, fill_type=type)
+
+def cell_align(sheet, column_list, align_type) :
+    for col_num in column_list : 
+        for row in range(2, sheet.max_row+1) : 
+            sheet.cell(row=row, column=col_num).alignment = Alignment(horizontal=align_type, vertical='center')
+
+def cell_line(sheet, dicBorder) :
+    thin_border = Border(
+            left=Side(style=dicBorder['left']),
+            right=Side(style=dicBorder['right']),
+            top=Side(style=dicBorder['top']),
+            bottom=Side(style=dicBorder['bottom'])
+        )
+
+    for row in sheet.iter_rows() :
+        for cell in row:
+            cell.border = thin_border
+
+def get_display_width(text):
+    width = 0
+    for char in str(text) : 
+        if unicodedata.east_asian_width(char) in ('F', 'W'):
+            width += 2
+        else : 
+            width += 1
+    return width
+
+def cell_auto_width(sheet):
+    column_list = sheet.columns
+    for col in column_list :
+        max_length = 0
+        for cell in col:
+            try:
+                tmp_length = get_display_width(cell.value)
+                if tmp_length > max_length:
+                    max_length = tmp_length
+            except:
+                pass
+
+            cell_cor = cell.coordinate
+            cell_column = re.sub(r'[0-9]', '', cell_cor)
+
+            worksheet.column_dimensions[cell_column].width = max_length
+        
 
 for file_name in files:
     card_type = file_name.split("_")[0].lower()
@@ -110,8 +163,19 @@ with pd.ExcelWriter(document.EXPORT_DOCUMENT+'/'+output_file_name, engine='openp
         resultData = pd.concat([group, mid_data, end_data], axis=1)
         
         # # TODO (UI 개선)디자인 추가
-        # worksheet = writer.sheets[month]
+        worksheet = writer.sheets[month]
 
-        # cell_color(worksheet, len(group.columns), 1, 'FFF2CC')
-        # cell_color(worksheet, len(mid_data.columns), 7, 'CFE2F3')
-        # cell_color(worksheet, len(end_data.columns), 13, 'F4CCCC')
+        # 헤더 색상 적용
+        cell_color(worksheet, len(group.columns), 1, 'FFF2CC')
+        cell_color(worksheet, len(mid_data.columns), 7, 'CFE2F3')
+        cell_color(worksheet, len(end_data.columns), 13, 'F4CCCC')
+
+        # 숫자 오른쪽 정렬
+        cell_align(worksheet, [3, 4, 7, 8, 9, 10, 13, 14, 15], 'right')
+
+        # 데이터가 있는 셀은 선 표시
+        cell_line(worksheet, dictBorder)
+
+        # 너비 자동 계산
+        cell_auto_width(worksheet)
+        
